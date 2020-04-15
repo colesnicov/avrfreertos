@@ -124,21 +124,6 @@ TickType_t portTickRateHz;
 volatile TickType_t ticksRemainingInSec;
 
 /*-----------------------------------------------------------*/
-/*
- * Perform hardware setup to enable ticks from timer compare match A.
- */
-static void prvSetupTimerInterrupt( void );
-
-
-#if defined(portUSE_TIMER2_RTC) && !defined(portUSE_TIMER2)
-/*
- * Perform hardware setup to enable 1 second sys_ticks() from RTC Timer2.
- */
-static void prvSetupRTCInterrupt( void );
-
-#endif
-
-/*-----------------------------------------------------------*/
 
 /*
  * Macro to save all the general purpose registers, the save the stack pointer
@@ -154,16 +139,19 @@ static void prvSetupRTCInterrupt( void );
  *
  * r0 is set to __tmp_reg__ as the compiler expects it to be thus.
  *
- * #if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
+ * #if defined(__AVR_HAVE_RAMPZ__)
  * #define __RAMPZ__ 0x3B
+ * #endif
+ *
+ * #if defined(__AVR_3_BYTE_PC__)
  * #define __EIND__  0x3C
  * #endif
  *
  * The interrupts will have been disabled during the call to portSAVE_CONTEXT()
  * so we need not worry about reading/writing to the stack pointer.
  */
-#if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
-/* 3-Byte PC Save */
+#if defined(__AVR_3_BYTE_PC__) && defined(__AVR_HAVE_RAMPZ__)
+/* 3-Byte PC Save  with RAMPZ */
 #define portSAVE_CONTEXT()                                                              \
         __asm__ __volatile__ (  "push   __tmp_reg__                             \n\t"   \
                                 "in     __tmp_reg__, __SREG__                   \n\t"   \
@@ -172,6 +160,54 @@ static void prvSetupRTCInterrupt( void );
                                 "in     __tmp_reg__, 0x3B                       \n\t"   \
                                 "push   __tmp_reg__                             \n\t"   \
                                 "in     __tmp_reg__, 0x3C                       \n\t"   \
+                                "push   __tmp_reg__                             \n\t"   \
+                                "push   __zero_reg__                            \n\t"   \
+                                "clr    __zero_reg__                            \n\t"   \
+                                "push   r2                                      \n\t"   \
+                                "push   r3                                      \n\t"   \
+                                "push   r4                                      \n\t"   \
+                                "push   r5                                      \n\t"   \
+                                "push   r6                                      \n\t"   \
+                                "push   r7                                      \n\t"   \
+                                "push   r8                                      \n\t"   \
+                                "push   r9                                      \n\t"   \
+                                "push   r10                                     \n\t"   \
+                                "push   r11                                     \n\t"   \
+                                "push   r12                                     \n\t"   \
+                                "push   r13                                     \n\t"   \
+                                "push   r14                                     \n\t"   \
+                                "push   r15                                     \n\t"   \
+                                "push   r16                                     \n\t"   \
+                                "push   r17                                     \n\t"   \
+                                "push   r18                                     \n\t"   \
+                                "push   r19                                     \n\t"   \
+                                "push   r20                                     \n\t"   \
+                                "push   r21                                     \n\t"   \
+                                "push   r22                                     \n\t"   \
+                                "push   r23                                     \n\t"   \
+                                "push   r24                                     \n\t"   \
+                                "push   r25                                     \n\t"   \
+                                "push   r26                                     \n\t"   \
+                                "push   r27                                     \n\t"   \
+                                "push   r28                                     \n\t"   \
+                                "push   r29                                     \n\t"   \
+                                "push   r30                                     \n\t"   \
+                                "push   r31                                     \n\t"   \
+                                "lds    r26, pxCurrentTCB                       \n\t"   \
+                                "lds    r27, pxCurrentTCB + 1                   \n\t"   \
+                                "in     __tmp_reg__, __SP_L__                   \n\t"   \
+                                "st     x+, __tmp_reg__                         \n\t"   \
+                                "in     __tmp_reg__, __SP_H__                   \n\t"   \
+                                "st     x+, __tmp_reg__                         \n\t"   \
+                             );
+#elif defined(__AVR_HAVE_RAMPZ__)
+/* 2-Byte PC Save  with RAMPZ */
+#define portSAVE_CONTEXT()                                                              \
+        __asm__ __volatile__ (  "push   __tmp_reg__                             \n\t"   \
+                                "in     __tmp_reg__, __SREG__                   \n\t"   \
+                                "cli                                            \n\t"   \
+                                "push   __tmp_reg__                             \n\t"   \
+                                "in     __tmp_reg__, 0x3B                       \n\t"   \
                                 "push   __tmp_reg__                             \n\t"   \
                                 "push   __zero_reg__                            \n\t"   \
                                 "clr    __zero_reg__                            \n\t"   \
@@ -264,8 +300,8 @@ static void prvSetupRTCInterrupt( void );
  * Opposite to portSAVE_CONTEXT().  Interrupts will have been disabled during
  * the context save so we can write to the stack pointer.
  */
-#if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
-/* 3-Byte PC Restore */
+#if defined(__AVR_3_BYTE_PC__) && defined(__AVR_HAVE_RAMPZ__)
+/* 3-Byte PC Restore with RAMPZ */
 #define portRESTORE_CONTEXT()                                                           \
         __asm__ __volatile__ (  "lds    r26, pxCurrentTCB                       \n\t"   \
                                 "lds    r27, pxCurrentTCB + 1                   \n\t"   \
@@ -306,6 +342,52 @@ static void prvSetupRTCInterrupt( void );
                                 "pop    __zero_reg__                            \n\t"   \
                                 "pop    __tmp_reg__                             \n\t"   \
                                 "out    0x3C, __tmp_reg__                       \n\t"   \
+                                "pop    __tmp_reg__                             \n\t"   \
+                                "out    0x3B, __tmp_reg__                       \n\t"   \
+                                "pop    __tmp_reg__                             \n\t"   \
+                                "out    __SREG__, __tmp_reg__                   \n\t"   \
+                                "pop    __tmp_reg__                             \n\t"   \
+                             );
+#elif defined(__AVR_HAVE_RAMPZ__)
+/* 2-Byte PC Restore with RAMPZ */
+#define portRESTORE_CONTEXT()                                                           \
+        __asm__ __volatile__ (  "lds    r26, pxCurrentTCB                       \n\t"   \
+                                "lds    r27, pxCurrentTCB + 1                   \n\t"   \
+                                "ld     r28, x+                                 \n\t"   \
+                                "out    __SP_L__, r28                           \n\t"   \
+                                "ld     r29, x+                                 \n\t"   \
+                                "out    __SP_H__, r29                           \n\t"   \
+                                "pop    r31                                     \n\t"   \
+                                "pop    r30                                     \n\t"   \
+                                "pop    r29                                     \n\t"   \
+                                "pop    r28                                     \n\t"   \
+                                "pop    r27                                     \n\t"   \
+                                "pop    r26                                     \n\t"   \
+                                "pop    r25                                     \n\t"   \
+                                "pop    r24                                     \n\t"   \
+                                "pop    r23                                     \n\t"   \
+                                "pop    r22                                     \n\t"   \
+                                "pop    r21                                     \n\t"   \
+                                "pop    r20                                     \n\t"   \
+                                "pop    r19                                     \n\t"   \
+                                "pop    r18                                     \n\t"   \
+                                "pop    r17                                     \n\t"   \
+                                "pop    r16                                     \n\t"   \
+                                "pop    r15                                     \n\t"   \
+                                "pop    r14                                     \n\t"   \
+                                "pop    r13                                     \n\t"   \
+                                "pop    r12                                     \n\t"   \
+                                "pop    r11                                     \n\t"   \
+                                "pop    r10                                     \n\t"   \
+                                "pop    r9                                      \n\t"   \
+                                "pop    r8                                      \n\t"   \
+                                "pop    r7                                      \n\t"   \
+                                "pop    r6                                      \n\t"   \
+                                "pop    r5                                      \n\t"   \
+                                "pop    r4                                      \n\t"   \
+                                "pop    r3                                      \n\t"   \
+                                "pop    r2                                      \n\t"   \
+                                "pop    __zero_reg__                            \n\t"   \
                                 "pop    __tmp_reg__                             \n\t"   \
                                 "out    0x3B, __tmp_reg__                       \n\t"   \
                                 "pop    __tmp_reg__                             \n\t"   \
@@ -359,6 +441,19 @@ static void prvSetupRTCInterrupt( void );
 #endif
 /*-----------------------------------------------------------*/
 
+/*
+ * Perform hardware setup to enable ticks from relevant Timer.
+ */
+static void prvSetupTimerInterrupt( void );
+
+#if defined(portUSE_TIMER2_RTC) && !defined(portUSE_TIMER2)
+/*
+ * Perform hardware setup to enable 1 second sys_ticks() from RTC Timer2.
+
+ */
+static void prvSetupRTCInterrupt( void );
+#endif
+/*-----------------------------------------------------------*/
 
 /*
  * See header file for description.
@@ -374,50 +469,31 @@ uint16_t usAddress;
 #warning "Ext RAM Enabled."
 #endif
 
-    /* Place a few bytes of known values on the bottom of the stack.
-    This is just useful for debugging. */
-
-    *pxTopOfStack = 0x11;
-    pxTopOfStack--;
-    *pxTopOfStack = 0x22;
-    pxTopOfStack--;
-    *pxTopOfStack = 0x33;
-    pxTopOfStack--;
-
     /* Simulate how the stack would look after a call to vPortYield() generated by
     the compiler. */
 
     /* The start of the task code will be popped off the stack last, so place
     it on first. */
+    usAddress = ( uint16_t ) pxCode;
+    *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
+    pxTopOfStack--;
 
-#if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
+    usAddress >>= 8;
+    *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
+    pxTopOfStack--;
+
+#if defined(__AVR_3_BYTE_PC__)
     /* The AVR ATmega2560/ATmega2561 have 256KBytes of program memory and a 17-bit
-     * program counter.  When a code address is stored on the stack, it takes 3 bytes
+     * program counter. When a code address is stored on the stack, it takes 3 bytes
      * instead of 2 for the other ATmega* chips.
      *
      * Store 0 as the top byte since we force all task routines to the bottom 128K
      * of flash. We do this by using the .lowtext label in the linker script.
      *
      * In order to do this properly, we would need to get a full 3-byte pointer to
-     * pxCode.  That requires a change to GCC.  Not likely to happen any time soon.
+     * pxCode. That requires a change to GCC. Not likely to happen any time soon.
      */
-    usAddress = ( uint16_t ) pxCode;
-    *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
-    pxTopOfStack--;
-
-    usAddress >>= 8;
-    *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
-    pxTopOfStack--;
-
     *pxTopOfStack = 0;
-    pxTopOfStack--;
-#else
-    usAddress = ( uint16_t ) pxCode;
-    *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
-    pxTopOfStack--;
-
-    usAddress >>= 8;
-    *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
     pxTopOfStack--;
 #endif
 
@@ -430,65 +506,27 @@ uint16_t usAddress;
     *pxTopOfStack = portFLAGS_INT_ENABLED;
     pxTopOfStack--;
 
-#if defined(__AVR_ATmega2560__) || defined(__AVR_ATmega2561__)
-
-    /* If we have an ATmega256x, we are also saving the RAMPZ and EIND registers.
-     * We should default those to 0.
+#if defined(__AVR_3_BYTE_PC__)
+    /* If we have an ATmega256x, we are also saving the EIND register.
+     * We should default to 0.
      */
     *pxTopOfStack = ( StackType_t ) 0x00;    /* EIND */
     pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x00;    /* RAMPZ */
-    pxTopOfStack--;
-
 #endif
 
-    /* Now the remaining registers.   The compiler expects R1 to be 0. */
+#if defined(__AVR_HAVE_RAMPZ__)
+    /* We are saving the RAMPZ register.
+     * We should default to 0.
+     */
+    *pxTopOfStack = ( StackType_t ) 0x00;    /* RAMPZ */
+    pxTopOfStack--;
+#endif
+
+    /* Now the remaining registers. The compiler expects R1 to be 0. */
     *pxTopOfStack = ( StackType_t ) 0x00;    /* R1 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x02;    /* R2 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x03;    /* R3 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x04;    /* R4 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x05;    /* R5 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x06;    /* R6 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x07;    /* R7 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x08;    /* R8 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x09;    /* R9 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x10;    /* R10 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x11;    /* R11 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x12;    /* R12 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x13;    /* R13 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x14;    /* R14 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x15;    /* R15 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x16;    /* R16 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x17;    /* R17 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x18;    /* R18 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x19;    /* R19 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x20;    /* R20 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x21;    /* R21 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x22;    /* R22 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x23;    /* R23 */
-    pxTopOfStack--;
+
+    /* Leave R2 - R23 untouched */
+    pxTopOfStack -= 23;
 
     /* Place the parameter on the stack in the expected location. */
     usAddress = ( uint16_t ) pvParameters;
@@ -497,20 +535,9 @@ uint16_t usAddress;
 
     usAddress >>= 8;
     *pxTopOfStack = ( StackType_t ) ( usAddress & ( uint16_t ) 0x00ff );
-    pxTopOfStack--;
 
-    *pxTopOfStack = ( StackType_t ) 0x26;    /* R26 X */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x27;    /* R27 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x28;    /* R28 Y */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x29;    /* R29 */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x30;    /* R30 Z */
-    pxTopOfStack--;
-    *pxTopOfStack = ( StackType_t ) 0x031;    /* R31 */
-    pxTopOfStack--;
+    /* Leave register R26 - R31 untouched */
+    pxTopOfStack -= 7;
 
     return pxTopOfStack;
 }
@@ -520,7 +547,7 @@ BaseType_t xPortStartScheduler( void )
 {
 
 #if defined(DEBUG_PING)
-        DDRD |= _BV(DDD7);        // set the debugging ping
+        DDRD |= _BV(DDD7);        /* set the debugging ping */
         PORTD &= ~_BV(PORTD7);
 #endif
 
@@ -535,7 +562,7 @@ BaseType_t xPortStartScheduler( void )
     /* Restore the context of the first task that is going to run. */
     portRESTORE_CONTEXT();
 
-    /* Simulate a function call end as generated by the compiler.  We will now
+    /* Simulate a function call end as generated by the compiler. We will now
     jump to the start of the task the context of which we have just restored. */
     __asm__ __volatile__ ( "ret" );
 
@@ -550,27 +577,27 @@ void vPortEndScheduler( void )
     disable the tick interrupt here. */
 
 #if defined (portUSE_WDTO)
-        wdt_disable();                                          // disable Watchdog Timer
+        wdt_disable();                                          /* disable Watchdog Timer */
 
 #elif defined( portUSE_TIMER0 )
-        portTIMSK &= ~( _BV(OCIE0B)|_BV(OCIE0A)|_BV(TOIE0) );   // disable all Timer0 interrupts
+        portTIMSK &= ~( _BV(OCIE0B)|_BV(OCIE0A)|_BV(TOIE0) );   /* disable all Timer0 interrupts */
 
 #elif defined( portUSE_TIMER1 )
-        portTIMSK &= ~( _BV(OCIE1B)|_BV(OCIE1A)|_BV(TOIE1) );   // disable all Timer1 interrupts
+        portTIMSK &= ~( _BV(OCIE1B)|_BV(OCIE1A)|_BV(TOIE1) );   /* disable all Timer1 interrupts */
 
 #elif defined( portUSE_TIMER2 )
-        portTIMSK &= ~( _BV(OCIE2B)|_BV(OCIE2A)|_BV(TOIE2) );   // disable all Timer2 interrupts
-        ASSR = 0x00;                                            // set Timer/Counter2 to be off
+        portTIMSK &= ~( _BV(OCIE2B)|_BV(OCIE2A)|_BV(TOIE2) );   /* disable all Timer2 interrupts */
+        ASSR = 0x00;                                            /* set Timer/Counter2 to be off */
 
 #elif defined( portUSE_TIMER3 )
-        portTIMSK &= ~( _BV(OCIE3B)|_BV(OCIE3A)|_BV(TOIE3) );   // disable all Timer3 interrupts
+        portTIMSK &= ~( _BV(OCIE3B)|_BV(OCIE3A)|_BV(TOIE3) );   /* disable all Timer3 interrupts */
 
 #endif
 }
 /*-----------------------------------------------------------*/
 
 /*
- * Manual context switch.  The first thing we do is save the registers so we
+ * Manual context switch. The first thing we do is save the registers so we
  * can use a naked attribute.
  */
 void vPortYield( void ) __attribute__ ( ( hot, flatten, naked ) );
@@ -585,8 +612,23 @@ void vPortYield( void )
 /*-----------------------------------------------------------*/
 
 /*
- * Context switch function used by the tick.  This must be identical to
- * vPortYield() from the call to vTaskSwitchContext() onwards.  The only
+ * Manual context switch callable from ISRs. The first thing we do is save
+ * the registers so we can use a naked attribute.
+ */
+void vPortYieldFromISR(void) __attribute__ ( ( hot, flatten, naked ) );
+void vPortYieldFromISR(void)
+{
+    portSAVE_CONTEXT();
+    vTaskSwitchContext();
+    portRESTORE_CONTEXT();
+
+    __asm__ __volatile__ ( "reti" );
+}
+/*-----------------------------------------------------------*/
+
+/*
+ * Context switch function used by the tick. This must be identical to
+ * vPortYield() from the call to vTaskSwitchContext() onwards. The only
  * difference from vPortYield() is the tick count is incremented as the
  * call comes from the tick ISR.
  */
@@ -594,12 +636,11 @@ void vPortYieldFromTick( void ) __attribute__ ( ( hot, flatten, naked ) );
 void vPortYieldFromTick( void )
 {
     portSAVE_CONTEXT();
-
-    sleep_reset();        //     reset the sleep_mode() faster than sleep_disable();
+    sleep_reset();        /* reset the sleep_mode() faster than sleep_disable(); */
 
 #if defined(DEBUG_PING)
-    // start mark - check for start of interrupt - for debugging only
-    PORTD |=  _BV(PORTD7);                // Ping IO line.
+    /* start mark - check for start of interrupt - for debugging only */
+    PORTD |=  _BV(PORTD7);                /* Ping IO line */
 #endif
 
 #if !defined(portUSE_TIMER2_RTC)
@@ -613,11 +654,10 @@ void vPortYieldFromTick( void )
     if( xTaskIncrementTick() != pdFALSE )
     {
         vTaskSwitchContext();
-
     }
 
 #if defined(DEBUG_PING)
-    // end mark - check for end of interrupt - for debugging only
+    /* end mark - check for end of interrupt - for debugging only */
     PORTD &= ~_BV(PORTD7);
 #endif
 
@@ -628,11 +668,12 @@ void vPortYieldFromTick( void )
 /*-----------------------------------------------------------*/
 
 #if defined(portUSE_WDTO)
-
-//initialize watchdog
+/*
+ * Setup WDT to generate a tick interrupt.
+ */
 void prvSetupTimerInterrupt( void )
 {
-    //reset watchdog
+    /* reset watchdog */
     wdt_reset();
 
      /* actual port tick rate in Hz, calculated */
@@ -640,7 +681,7 @@ void prvSetupTimerInterrupt( void )
     /* initialise first second of ticks */
     ticksRemainingInSec = portTickRateHz;
 
-    //set up WDT Interrupt (rather than the WDT Reset).
+    /* set up WDT Interrupt (rather than the WDT Reset). */
     wdt_interrupt_enable( portUSE_WDTO );
 }
 
@@ -712,7 +753,6 @@ uint8_t ucLowByte;
     ucLowByte = portTIMSK;
     ucLowByte |= portCOMPARE_MATCH_A_INTERRUPT_ENABLE;
     portTIMSK = ucLowByte;
-
 }
 
 #elif defined(portUSE_TIMER2)
@@ -776,7 +816,6 @@ static void prvSetupTimerInterrupt( void )
 
     /* Enable the interrupt - this is okay as interrupts are currently globally disabled. */
     portTIMSK |= portCOMPARE_MATCH_A_INTERRUPT_ENABLE;          // interrupt on Timer2 compare match
-
 }
 #endif
 
@@ -821,31 +860,33 @@ static void prvSetupRTCInterrupt( void )
 #if configUSE_PREEMPTION == 1
 
     /*
-     * Tick ISR for preemptive scheduler.  We can use a naked attribute as
-     * the context is saved at the start of vPortYieldFromTick().  The tick
+     * Tick ISR for preemptive scheduler. We can use a naked attribute as
+     * the context is saved at the start of vPortYieldFromTick(). The tick
      * count is incremented after the context is saved.
      *
      * use ISR_NOBLOCK where there is an important timer running, that should preempt the scheduler.
      *
      */
     ISR(portSCHEDULER_ISR, ISR_NAKED) __attribute__ ((hot, flatten));
-//  ISR(portSCHEDULER_ISR, ISR_NAKED ISR_NOBLOCK) __attribute__ ((hot, flatten));
+/*  ISR(portSCHEDULER_ISR, ISR_NAKED ISR_NOBLOCK) __attribute__ ((hot, flatten));
+ */
     ISR(portSCHEDULER_ISR)
     {
         vPortYieldFromTick();
         __asm__ __volatile__ ( "reti" );
     }
-
 #else
+
     /*
-     * Tick ISR for the cooperative scheduler.  All this does is increment the
-     * tick count.  We don't need to switch context, this can only be done by
+     * Tick ISR for the cooperative scheduler. All this does is increment the
+     * tick count. We don't need to switch context, this can only be done by
      * manual calls to taskYIELD();
      *
      * use ISR_NOBLOCK where there is an important timer running, that should preempt the scheduler.
      */
     ISR(portSCHEDULER_ISR) __attribute__ ((hot, flatten));
-//  ISR(portSCHEDULER_ISR, ISR_NOBLOCK) __attribute__ ((hot, flatten));
+/*  ISR(portSCHEDULER_ISR, ISR_NOBLOCK) __attribute__ ((hot, flatten));
+ */
     ISR(portSCHEDULER_ISR)
     {
 #if !defined(portUSE_TIMER2_RTC)
@@ -860,8 +901,6 @@ static void prvSetupRTCInterrupt( void )
 
 #endif // configUSE_PREEMPTION
 
-
-
 #if defined (portUSE_TIMER2_RTC) && !defined(portUSE_TIMER2)
     /*
      * Tick ISR for the RTC.  All this does is increment the RTC tick count, once per second.
@@ -870,7 +909,8 @@ static void prvSetupRTCInterrupt( void )
      *
      * use ISR_NOBLOCK where there is an important timer running, that should preempt the scheduler.
      */
-//  ISR(TIMER2_OVF_vect, ISR_NAKED ISR_NOBLOCK ) __attribute__ ((hot, flatten));
+/*  ISR(TIMER2_OVF_vect, ISR_NAKED ISR_NOBLOCK ) __attribute__ ((hot, flatten));
+ */
     ISR(TIMER2_OVF_vect, ISR_NAKED ) __attribute__ ((hot, flatten));
     ISR(TIMER2_OVF_vect)
     {
